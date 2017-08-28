@@ -1,0 +1,146 @@
+###
+# BEGIN zero (SM-G92[0/5]x) device-properties
+#
+# Copyright (C) 2016 The CyanogenMod Project
+# Copyright (C) 2017 The LineageOS Project
+# Copyright (C)      TeamNexus
+#
+
+#
+# ADB (rooted, with early-init support)
+#
+ro.adb.secure=0
+ro.secure=0
+ro.allow.mock.location=0
+ro.debuggable=1
+sys.usb.config=adb
+persist.sys.adb.shell=/system/xbin/bash
+persist.sys.usb.config=adb
+persist.service.adb.enable=1
+persist.service.debuggable=1
+
+#
+# Audio
+#
+af.fast_track_multiplier=1
+audio_hal.force_voice_config=wide
+
+#
+# Compositing
+#
+debug.composition.type=gpu
+ro.opengles.version=196610
+video.accelerate.hw=1
+
+#
+# Dalvik
+#
+dalvik.vm.image-dex2oat-filter=speed
+dalvik.vm.dex2oat-filter=speed
+dalvik.vm.heapgrowthlimit=256m
+dalvik.vm.heapstartsize=8m
+dalvik.vm.heapsize=512m
+dalvik.vm.heaptargetutilization=0.75
+dalvik.vm.heapminfree=512k
+dalvik.vm.heapmaxfree=8m
+
+#
+# GMS
+#
+ro.product.first_api_level=22
+
+#
+# HWUI
+#
+ro.hwui.texture_cache_size=88
+ro.hwui.layer_cache_size=58
+ro.hwui.path_cache_size=16
+ro.hwui.texture_cache_flushrate=0.4
+ro.hwui.shape_cache_size=4
+ro.hwui.gradient_cache_size=2
+ro.hwui.drop_shadow_cache_size=6
+ro.hwui.r_buffer_cache_size=8
+ro.hwui.text_small_cache_width=1024
+ro.hwui.text_small_cache_height=1024
+ro.hwui.text_large_cache_width=4096
+ro.hwui.text_large_cache_height=2048
+
+#
+# H/W Composer
+#
+debug.hwc.force_gpu=0
+debug.hwc.max_hw_overlays=1
+debug.egl.hw=1
+debug.sf.enable_hwc_vds=1
+debug.sf.hw=1
+persist.sys.ui.hw=true
+
+#
+# Logging
+#
+logd.logpersistd=logcatd
+logd.logpersistd.buffer=all
+logd.logpersistd.enable=true
+logd.logpersistd.size=1024
+logd.logpersistd.size.rotate=64
+
+#
+# Media
+#
+media.sf.omx-plugin=libffmpeg_omx.so,libsomxcore.so
+persist.media.treble_omx=false
+
+#
+# Networking
+#
+net.tethering.noprovisioning=true
+persist.data.netmgrd.qos.enable=false
+ro.use_data_netmgrd=false
+
+#
+# RIL
+#
+persist.radio.add_power_save=1
+persist.radio.apm_sim_not_pwdn=1
+rild.libpath=/system/lib64/libsec-ril.so
+rild.libpath2=/system/lib64/libsec-ril-dsds.so
+ro.config.vc_call_vol_steps=15
+ro.ril.force_eri_from_xml=true
+ro.ril.gprsclass=10
+ro.ril.hsxpa=1
+ro.ril.telephony.mqanelements=6
+ro.telephony.default_network=9
+ro.telephony.get_imsi_from_sim=true
+ro.telephony.ril_class=SlteRIL
+telephony.lteOnGsmDevice=1
+telephony.lteOnCdmaDevice=0
+
+# read single/dual-SIM properties
+import /vendor/etc/properties/radio.prop
+import /efs/factory.prop
+
+#
+# SoC
+#
+ro.chipname=exynos7420
+ro.nfc.sec_hal=true
+ro.sf.lcd_density=640
+
+#
+# Storage
+#
+ro.sys.sdcardfs=1
+
+#
+# WiFi
+#
+wifi.interface=wlan0
+
+#
+# Zygote
+#
+ro.zygote.disable_gl_preload=1
+
+#
+# END zero device-properties
+###

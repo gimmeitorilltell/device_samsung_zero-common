@@ -40,10 +40,6 @@ PRODUCT_AAPT_PREBUILT_DPI := xxxhdpi xxhdpi xhdpi hdpi
 TARGET_SCREEN_HEIGHT := 2560
 TARGET_SCREEN_WIDTH := 1440
 
-$(call inherit-product, frameworks/native/build/phone-xxxhdpi-3072-dalvik-heap.mk)
-
-$(call inherit-product-if-exists, frameworks/native/build/phone-xxxhdpi-3072-hwui-memory.mk)
-
 # Permissions
 PRODUCT_COPY_FILES += \
     frameworks/native/data/etc/android.hardware.bluetooth_le.xml:system/etc/permissions/android.hardware.bluetooth_le.xml \
@@ -254,8 +250,11 @@ PRODUCT_PROPERTY_OVERRIDES += \
     
 # media build properties
 PRODUCT_PROPERTY_OVERRIDES += \
-	media.sf.omx-plugin=libffmpeg_omx.so,libsomxcore.so 
+	media.sf.omx-plugin=libffmpeg_omx.so,libsomxcore.so
 
+# Properties
+PRODUCT_COPY_FILES += \
+    device/samsung/zero-common/zero-common.prop:system/vendor/build.prop
 # Radio
 PRODUCT_PACKAGES += \
 	libxml2 \
