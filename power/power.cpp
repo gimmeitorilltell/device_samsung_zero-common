@@ -527,11 +527,7 @@ struct sec_power_module HAL_MODULE_INFO_SYM = {
 	.base = {
 		.common = {
 			.tag = HARDWARE_MODULE_TAG,
-#ifdef HAS_LAUNCH_HINT_SUPPORT
-			.module_api_version = POWER_MODULE_API_VERSION_0_6,
-#else
 			.module_api_version = POWER_MODULE_API_VERSION_0_5,
-#endif
 			.hal_api_version = HARDWARE_HAL_API_VERSION,
 			.id = POWER_HARDWARE_MODULE_ID,
 			.name = "Power HAL for Exynos 7420 SoCs",
