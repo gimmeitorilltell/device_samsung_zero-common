@@ -55,6 +55,9 @@ TARGET_BOOTANIMATION_TEXTURE_CACHE := true
 TARGET_BOOTLOADER_BOARD_NAME := universal7420
 TARGET_NO_BOOTLOADER := true
 
+# Build
+PRODUCT_SKIP_FINGERPRINT_FROM_FILE := true
+
 # Charger
 WITH_LINEAGE_CHARGER := false
 BACKLIGHT_PATH := /sys/devices/13900000.dsim/backlight/panel/brightness
