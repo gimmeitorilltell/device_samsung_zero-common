@@ -134,6 +134,7 @@ PRODUCT_PACKAGES += \
 PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/configs/gps.conf:system/etc/gps.conf \
     $(LOCAL_PATH)/configs/gps.xml:system/etc/gps.xml \
+    $(LOCAL_PATH)/configs/gnss.conf:system/etc/gnss.conf \
     $(LOCAL_PATH)/configs/lhd.conf:system/etc/lhd.conf
 
 # Fingerprint
@@ -146,6 +147,10 @@ PRODUCT_PACKAGES += \
 PRODUCT_PACKAGES += \
     android.hardware.gnss@1.0-impl \
     android.hardware.gnss@1.0-service
+
+# OSS packages
+PRODUCT_PACKAGES += \
+    gps.default
 
 # GPS
 PRODUCT_PACKAGES += \
