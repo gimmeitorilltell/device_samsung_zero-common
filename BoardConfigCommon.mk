@@ -197,6 +197,9 @@ endif
 TARGET_SCREEN_HEIGHT := 2560
 TARGET_SCREEN_WIDTH := 1440
 
+# Video scaling issue workaround
+TARGET_OMX_LEGACY_RESCALING := true
+
 # WFD
 BOARD_USES_WFD := true
 
