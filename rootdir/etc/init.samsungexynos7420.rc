@@ -5,6 +5,7 @@ import init.carrier.rc
 import init.power.rc
 import init.rilchip.rc
 import init.battery.rc
+import init.nexus.rc
 
 on early-init
     mount debugfs /sys/kernel/debug /sys/kernel/debug mode=755
