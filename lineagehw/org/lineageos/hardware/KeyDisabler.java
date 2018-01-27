@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-package org.cyanogenmod.hardware;
+package org.lineageos.hardware;
 
-import org.cyanogenmod.hardware.util.FileUtils;
+import org.lineageos.internal.util.FileUtils;
 
 /*
  * Disable capacitive keys
@@ -29,18 +29,26 @@ import org.cyanogenmod.hardware.util.FileUtils;
 
 public class KeyDisabler {
 
+    private static String NAME_PATH = "/sys/class/sec/sec_touchkey/input/name";
     private static String CONTROL_PATH = "/sys/class/sec/sec_touchkey/input/enabled";
 
     public static boolean isSupported() {
-        return true;
+        return FileUtils.readOneLine(NAME_PATH).equals("sec_touchkey") &&
+            FileUtils.isFileWritable(CONTROL_PATH);
     }
 
     public static boolean isActive() {
-        return (FileUtils.readOneLine(CONTROL_PATH).equals("0"));
+        if (KeyDisabler.isSupported()) {
+            return FileUtils.readOneLine(CONTROL_PATH).equals("0");
+        }
+        return true;
     }
 
     public static boolean setActive(boolean state) {
-        return FileUtils.writeLine(CONTROL_PATH, (state ? "0" : "1"));
+        if (KeyDisabler.isSupported()) {
+            return FileUtils.writeLine(CONTROL_PATH, (state ? "0" : "1"));
+        }
+        return false;
     }
 
 }
