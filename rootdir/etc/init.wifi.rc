@@ -30,8 +30,9 @@ on post-fs-data
     chown system wifi /efs/wifi/.mac.info
     chmod 0660 /efs/wifi/.mac.info
 
-	# Set permissions for firmware path control
-	chown wifi wifi /sys/module/dhd/parameters/firmware_path
+    # Set permissions for firmware path control
+    chown wifi wifi /sys/module/dhd/parameters/firmware_path
+    chmod 0660 /sys/module/dhd/parameters/firmware_path
 
 on boot
 	setprop wifi.interface wlan0
