@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 2013 The Android Open Source Project
  * Copyright (C) 2017 Jesse Chan <cjx123@outlook.com>
- * Copyright (C) 2017 Lukas Berger <mail@lukasberger.at>
+ * Copyright (C) 2018 Lukas Berger <mail@lukasberger.at>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,29 +16,23 @@
  * limitations under the License.
  */
 
-#define LOG_TAG "power.exynos5"
-#define LOG_NDEBUG 1
+#include "log.h"
 
 #include <atomic>
 #include <cutils/properties.h>
-#include <fcntl.h>
-#include <fstream>
 #include <future>
 #include <hardware/hardware.h>
 #include <hardware/power.h>
-#include <iostream>
 #include <linux/stat.h>
 #include <math.h>
 #include <pwd.h>
-#include <sstream>
 #include <stdlib.h>
 #include <string>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <utils/Log.h>
 
+#include "config.h"
 #include "power.h"
 #include "profiles.h"
+#include "utils.h"
 
 using namespace std;
 
@@ -50,37 +44,46 @@ struct sec_power_module {
 #define container_of(addr, struct_name, field_name) \
 	((struct_name *)((char *)(addr) - offsetof(struct_name, field_name)))
 
-static int current_power_profile = PROFILE_BALANCED;
-static int requested_power_profile = PROFILE_BALANCED;
-
-static int input_state_touchkeys = 1;
+static power_module_t *instance = nullptr;
+static struct sec_power_module *power = nullptr;
 
 /***********************************
  * Initializing
  */
-static int power_open(const hw_module_t __unused * module, const char *name, hw_device_t **device) {
+static int power_open(const hw_module_t *module, const char *name, hw_device_t **device) {
 	int retval = 0; // 0 is ok; -1 is error
 
 	ALOGD("%s: enter; name=%s", __func__, name);
 
 	if (strcmp(name, POWER_HARDWARE_MODULE_ID) == 0) {
-		power_module_t *dev = (power_module_t *)calloc(1, sizeof(power_module_t));
-
-		if (dev) {
-			// Common hw_device_t fields
-			dev->common.tag = HARDWARE_DEVICE_TAG;
-			dev->common.module_api_version = POWER_MODULE_API_VERSION_0_5;
-			dev->common.hal_api_version = HARDWARE_HAL_API_VERSION;
-
-			dev->init = power_init;
-			dev->powerHint = power_hint;
-			dev->getFeature = power_get_feature;
-			dev->setFeature = power_set_feature;
-			dev->setInteractive = power_set_interactive;
-
-			*device = (hw_device_t *)dev;
+		if (instance) {
+			ALOGDD("%s: using shared instance(0x%x:0x%x)", __func__, instance, power);
+			*device = (hw_device_t *)power;
 		} else {
-			retval = -ENOMEM;
+			power_module_t *dev = (power_module_t *)calloc(1, sizeof(power_module_t));
+
+			ALOGDD("%s: creating new instance", __func__, dev, module);
+			if (dev) {
+				// Common hw_device_t fields
+				dev->common.tag = HARDWARE_DEVICE_TAG;
+				dev->common.module_api_version = POWER_MODULE_API_VERSION_0_5;
+				dev->common.hal_api_version = HARDWARE_HAL_API_VERSION;
+
+				dev->init = power_init;
+				dev->powerHint = power_hint;
+#ifdef POWER_HAS_LINEAGE_HINTS
+				dev->getFeature = power_get_feature;
+#endif
+				dev->setFeature = power_set_feature;
+				dev->setInteractive = power_set_interactive;
+
+				*device = (hw_device_t *)dev;
+
+				instance = dev;
+				power = container_of(dev, struct sec_power_module, base);
+			} else {
+				retval = -ENOMEM;
+			}
 		}
 	} else {
 		retval = -EINVAL;
@@ -90,41 +93,65 @@ static int power_open(const hw_module_t __unused * module, const char *name, hw_
 	return retval;
 }
 
-static void power_init(struct power_module __unused * module) {
-	if (!is_file(POWER_CONFIG_FP_ALWAYS_ON))
-		pfwrite(POWER_CONFIG_FP_ALWAYS_ON, false);
+static void power_init(struct power_module *module) {
+	ALOGDD("%s: enter;", __func__);
+	pthread_mutex_lock(&power->lock);
 
-	if (!is_file(POWER_CONFIG_FP_WAKELOCKS))
-		pfwrite(POWER_CONFIG_FP_WAKELOCKS, false);
+	if (power->initialized) {
+		ALOGDD("%s: exit; (already initialized)", __func__);
+		return;
+	}
 
-	if (!is_file(POWER_CONFIG_DT2W))
-		pfwrite(POWER_CONFIG_DT2W, false);
+	// enter init-mode
+	power_config_set_init(true);
 
-	if (!is_file(POWER_CONFIG_BOOST))
-		pfwrite(POWER_CONFIG_BOOST, true);
-
-	if (!is_file(POWER_CONFIG_PROFILES))
-		pfwrite(POWER_CONFIG_PROFILES, true);
+	// get correct touchkeys/enabled-file
+	// reads from input1/name:
+	//   - flat will return sec_touchscreen
+	//   - edge won't
+	string touchscreen_input_name;
+	read(POWER_TOUCHSCREEN_NAME, touchscreen_input_name);
+	ALOGDD("%s: '%s' == '%s'", __func__, touchscreen_input_name.c_str(), POWER_TOUCHSCREEN_NAME_EXPECT);
+	if (touchscreen_input_name == POWER_TOUCHSCREEN_NAME_EXPECT) {
+		power->input.touchscreen_control_path = POWER_TOUCHSCREEN_ENABLED_FLAT;
+	} else {
+		power->input.touchscreen_control_path = POWER_TOUCHSCREEN_ENABLED_EDGE;
+	}
 
 	// set to normal power profile
-	power_set_profile(PROFILE_BALANCED);
+	power->profile.requested = PROFILE_BALANCED;
+	power_set_profile( PROFILE_BALANCED);
 
 	// initialize all input-devices
-	power_input_device_state(1);
+	power_input_device_state(true);
 
-	// set the default settings
-	if (!is_dir("/data/power"))
-		mkdir("/data/power", 0771);
+	// disable dt2w by default
+	power_dt2w_state( false);
+
+	// enable fingerprint by default
+	power_fingerprint_state(true);
+
+	// exit init-mode
+	power_config_set_init(false);
+
+	power->initialized = true;
+	pthread_mutex_unlock(&power->lock);
+	ALOGDD("%s: exit;", __func__);
 }
 
 /***********************************
  * Hinting
  */
 static void power_hint(struct power_module *module, power_hint_t hint, void *data) {
-	struct sec_power_module *sec = container_of(module, struct sec_power_module, base);
 	int value = (data ? *((intptr_t *)data) : 0);
 
-	pthread_mutex_lock(&sec->lock);
+	ALOGDD("%s: enter; hint=%d", __func__, hint);
+	pthread_mutex_lock(&power->lock);
+
+	if (!power->initialized) {
+		ALOGDD("%s: exit; (not yet initialized)", __func__);
+		return;
+	}
 
 	switch (hint) {
 
@@ -132,171 +159,191 @@ static void power_hint(struct power_module *module, power_hint_t hint, void *dat
 		 * Profiles
 		 */
 		case POWER_HINT_LOW_POWER:
-			ALOGI("%s: hint(POWER_HINT_LOW_POWER, %d, %llu)", __func__, value, (unsigned long long)data);
-			power_set_profile(value ? PROFILE_POWER_SAVE : requested_power_profile);
+			if (power_has_profiles_enabled()) {
+				ALOGI("%s: hint(POWER_HINT_LOW_POWER, %d, %llu)", __func__, value, (unsigned long long)data);
+				power_set_profile(value ? PROFILE_POWER_SAVE : power->profile.requested);
+			}
 			break;
 
 		case POWER_HINT_SET_PROFILE:
-			ALOGI("%s: hint(POWER_HINT_SET_PROFILE, %d, %llu)", __func__, value, (unsigned long long)data);
-			requested_power_profile = value;
-			power_set_profile(value);
+			if (power_has_profiles_enabled()) {
+				ALOGI("%s: hint(POWER_HINT_SET_PROFILE, %d, %llu)", __func__, value, (unsigned long long)data);
+				power->profile.requested = value;
+				power_set_profile(value);
+			}
 			break;
 
 		case POWER_HINT_SUSTAINED_PERFORMANCE:
 		case POWER_HINT_VR_MODE:
-			if (hint == POWER_HINT_SUSTAINED_PERFORMANCE)
-				ALOGI("%s: hint(POWER_HINT_SUSTAINED_PERFORMANCE, %d, %llu)", __func__, value, (unsigned long long)data);
-			else if (hint == POWER_HINT_VR_MODE)
-				ALOGI("%s: hint(POWER_HINT_VR_MODE, %d, %llu)", __func__, value, (unsigned long long)data);
+			if (power_has_profiles_enabled()) {
+				if (hint == POWER_HINT_SUSTAINED_PERFORMANCE)
+					ALOGI("%s: hint(POWER_HINT_SUSTAINED_PERFORMANCE, %d, %llu)", __func__, value, (unsigned long long)data);
+				else if (hint == POWER_HINT_VR_MODE)
+					ALOGI("%s: hint(POWER_HINT_VR_MODE, %d, %llu)", __func__, value, (unsigned long long)data);
 
-			power_set_profile(value ? PROFILE_HIGH_PERFORMANCE : requested_power_profile);
+				power_set_profile(value ? PROFILE_HIGH_PERFORMANCE : power->profile.requested);
+			}
 			break;
 
-#ifdef POWER_HAS_NEXUSOS_HINTS
-		case POWER_HINT_DREAMING_OR_DOZING:
-			ALOGI("%s: hint(POWER_HINT_DREAMING_OR_DOZING, %d, %llu)", __func__, value, (unsigned long long)data);
-			power_set_profile(value ? PROFILE_DREAMING_OR_DOZING : requested_power_profile);
-			break;
-#endif
-			
 		/***********************************
 		 * Boosting
 		 */
 		case POWER_HINT_INTERACTION:
-			// ALOGI("%s: hint(POWER_HINT_INTERACTION, %d, %llu)", __func__, value, (unsigned long long)data);
+			if (power_has_interaction_boost()) {
+				ALOGI("%s: hint(POWER_HINT_INTERACTION, %d, %llu)", __func__, value, (unsigned long long)data);
 
-			/* power_boostpulse(value ? value : 50000);
-			power_boostpulse(value ? value : 50000); */
+				power_boostpulse(value ? value : 50000);
+				power_boostpulse(value ? value : 50000);
+			}
 
 			break;
 
+#ifdef POWER_HAS_LINEAGE_HINTS
         case POWER_HINT_CPU_BOOST:
-			// ALOGI("%s: hint(POWER_HINT_CPU_BOOST, %d, %llu)", __func__, value, (unsigned long long)data);
+			if (power_has_cpu_boost()) {
+				ALOGI("%s: hint(POWER_HINT_CPU_BOOST, %d, %llu)", __func__, value, (unsigned long long)data);
 
-			power_boostpulse(value);
-			power_boostpulse(value);
+				power_boostpulse(value);
+				power_boostpulse(value);
+			}
 
 			break;
+#endif // POWER_HAS_LINEAGE_HINTS
 
 		/***********************************
 		 * Inputs
 		 */
 		case POWER_HINT_DISABLE_TOUCH:
 			ALOGI("%s: hint(POWER_HINT_DISABLE_TOUCH, %d, %llu)", __func__, value, (unsigned long long)data);
-			power_input_device_state(value ? 0 : 1);
+			power_input_device_state(value ? false : true);
 			break;
 
 		default: break;
 	}
 
-	pthread_mutex_unlock(&sec->lock);
+	pthread_mutex_unlock(&power->lock);
+	ALOGDD("%s: exit;", __func__);
 }
 
 /***********************************
  * Profiles
  */
 static void power_set_profile(int profile) {
-	int profiles = 1;
-
-	pfread(POWER_CONFIG_PROFILES, &profiles);
-	if (!profiles) {
-		ALOGD("%s: profiles disabled (tried to apply profile %d)", __func__, profile);
-		return;
-	}
-
- 	ALOGD("%s: apply profile %d", __func__, profile);
+ 	ALOGI("%s: apply profile %d", __func__, profile);
 
 	// store it
-	current_power_profile = profile;
+	power->profile.current = profile;
 
 	// apply settings
-	struct power_profile data = power_profiles[current_power_profile + 2];
+	power_profile data = power_profiles[power->profile.current + 1];
+
+	// read current configuration
+	if (!update_current_cpugov_path(0) ||
+		!update_current_cpugov_path(4)) {
+		ALOGW("Failed to load current cpugov-configuration");
+		return;
+	}
 
 	/*********************
 	 * CPU Cluster0
 	 */
-	pfwritegov(0, "freq_min",     data.cpu.cl0.freq_min); /* Core, File, Value */
-	pfwritegov(0, "freq_max",     data.cpu.cl0.freq_max);
-	pfwritegov(0, "hispeed_freq", data.cpu.cl0.freq_max);
-	if (pfassertgov(0, "nexus")) {
-		pfwritegov(0, "down_load",                   data.cpu.nexus.down_load);
-		pfwritegov(0, "down_step",                   data.cpu.nexus.down_step);
-		pfwritegov(0, "down_load_to_step_ratio",     data.cpu.nexus.down_lts_ratio);
-		pfwritegov(0, "down_load_to_step_elevation", data.cpu.nexus.down_lts_elev);
-		pfwritegov(0, "up_load",                     data.cpu.nexus.up_load);
-		pfwritegov(0, "up_step",                     data.cpu.nexus.up_step);
-		pfwritegov(0, "up_load_to_step_ratio",       data.cpu.nexus.up_lts_ratio);
-		pfwritegov(0, "up_load_to_step_elevation",   data.cpu.nexus.up_lts_elev);
+	if (power_is_subprofile_enabled("cl0freq")) {
+		write_cpugov(0, "freq_min",     data.cpu.cl0.freq_min);
+		write_cpugov(0, "freq_max",     data.cpu.cl0.freq_max);
+		write_cpugov(0, "hispeed_freq", data.cpu.cl0.freq_max);
+	}
+	if (power_is_subprofile_enabled("cl0gov")) {
+		if (assert_cpugov(0, "nexus")) {
+			write_cpugov(0, "down_load",                   data.cpu.nexus.down_load);
+			write_cpugov(0, "down_step",                   data.cpu.nexus.down_step);
+			write_cpugov(0, "down_load_to_step_ratio",     data.cpu.nexus.down_lts_ratio);
+			write_cpugov(0, "down_load_to_step_elevation", data.cpu.nexus.down_lts_elev);
+			write_cpugov(0, "up_load",                     data.cpu.nexus.up_load);
+			write_cpugov(0, "up_step",                     data.cpu.nexus.up_step);
+			write_cpugov(0, "up_load_to_step_ratio",       data.cpu.nexus.up_lts_ratio);
+			write_cpugov(0, "up_load_to_step_elevation",   data.cpu.nexus.up_lts_elev);
+		}
 	}
 
 	/*********************
 	 * CPU Cluster1
 	 */
-	pfwritegov(4, "freq_min",     data.cpu.cl1.freq_min); /* Core, File, Value */
-	pfwritegov(4, "freq_max",     data.cpu.cl1.freq_max);
-	pfwritegov(4, "hispeed_freq", data.cpu.cl1.freq_max);
-	if (pfassertgov(4, "nexus")) {
-		pfwritegov(4, "down_load",                   data.cpu.nexus.down_load);
-		pfwritegov(4, "down_step",                   data.cpu.nexus.down_step);
-		pfwritegov(4, "down_load_to_step_ratio",     data.cpu.nexus.down_lts_ratio);
-		pfwritegov(4, "down_load_to_step_elevation", data.cpu.nexus.down_lts_elev);
-		pfwritegov(4, "up_load",                     data.cpu.nexus.up_load);
-		pfwritegov(4, "up_step",                     data.cpu.nexus.up_step);
-		pfwritegov(4, "up_load_to_step_ratio",       data.cpu.nexus.up_lts_ratio);
-		pfwritegov(4, "up_load_to_step_elevation",   data.cpu.nexus.up_lts_elev);
+	if (power_is_subprofile_enabled("cl1freq")) {
+		write_cpugov(4, "freq_min",     data.cpu.cl1.freq_min);
+		write_cpugov(4, "freq_max",     data.cpu.cl1.freq_max);
+		write_cpugov(4, "hispeed_freq", data.cpu.cl1.freq_max);
+	}
+	if (power_is_subprofile_enabled("cl1gov")) {
+		if (assert_cpugov(4, "nexus")) {
+			write_cpugov(4, "down_load",                   data.cpu.nexus.down_load);
+			write_cpugov(4, "down_step",                   data.cpu.nexus.down_step);
+			write_cpugov(4, "down_load_to_step_ratio",     data.cpu.nexus.down_lts_ratio);
+			write_cpugov(4, "down_load_to_step_elevation", data.cpu.nexus.down_lts_elev);
+			write_cpugov(4, "up_load",                     data.cpu.nexus.up_load);
+			write_cpugov(4, "up_step",                     data.cpu.nexus.up_step);
+			write_cpugov(4, "up_load_to_step_ratio",       data.cpu.nexus.up_lts_ratio);
+			write_cpugov(4, "up_load_to_step_elevation",   data.cpu.nexus.up_lts_elev);
+		}
 	}
 
 	/*********************
 	 * HMP
 	 */
-	pfwrite("/sys/kernel/hmp/boost",                   data.hmp.boost);
-	pfwrite("/sys/kernel/hmp/semiboost",               data.hmp.semiboost);
-	pfwrite("/sys/kernel/hmp/sb_down_threshold",       data.hmp.sb_down_thres);
-	pfwrite("/sys/kernel/hmp/sb_up_threshold",         data.hmp.sb_up_thres);
-	pfwrite("/sys/kernel/hmp/active_down_migration",   data.hmp.active_down_migration);
-	pfwrite("/sys/kernel/hmp/aggressive_up_migration", data.hmp.aggressive_up_migration);
+	if (power_is_subprofile_enabled("hmp")) {
+		write("/sys/kernel/hmp/boost",                   data.hmp.boost);
+		write("/sys/kernel/hmp/semiboost",               data.hmp.semiboost);
+		write("/sys/kernel/hmp/sb_down_threshold",       data.hmp.sb_down_thres);
+		write("/sys/kernel/hmp/sb_up_threshold",         data.hmp.sb_up_thres);
+		write("/sys/kernel/hmp/active_down_migration",   data.hmp.active_down_migration);
+		write("/sys/kernel/hmp/aggressive_up_migration", data.hmp.aggressive_up_migration);
+	}
 
 	/*********************
 	 * GPU
 	 */
-	pfwrite("/sys/devices/14ac0000.mali/dvfs_min_lock", data.gpu.min_lock);
-	pfwrite("/sys/devices/14ac0000.mali/dvfs_max_lock", data.gpu.max_lock);
+	if (power_is_subprofile_enabled("gpu")) {
+		write("/sys/devices/14ac0000.mali/dvfs_min_lock", data.gpu.min_lock);
+		write("/sys/devices/14ac0000.mali/dvfs_max_lock", data.gpu.max_lock);
+	}
 
 	/*********************
 	 * Input
 	 */
-	pfwrite_legacy("/sys/class/input_booster/level", (data.input.booster ? 2 : 0));
-	pfwrite_legacy("/sys/class/input_booster/head", data.input.booster_table);
-	pfwrite_legacy("/sys/class/input_booster/tail", data.input.booster_table);
-	
+	if (power_is_subprofile_enabled("input")) {
+		write("/sys/class/input_booster/level", (data.input.booster ? 2 : 0));
+		write("/sys/class/input_booster/head", data.input.booster_table);
+		write("/sys/class/input_booster/tail", data.input.booster_table);
+	}
+
 	/*********************
-	 * Generic Settings
+	 * Thermal
 	 */
-	pfwrite("/sys/power/enable_dm_hotplug", false);
-	pfwrite("/sys/power/ipa/control_temp", data.ipa_control_temp);
-	pfwrite("/sys/module/workqueue/parameters/power_efficient", data.power_efficient_workqueue);
+	if (power_is_subprofile_enabled("thermal")) {
+		write("/sys/power/enable_dm_hotplug", data.thermal.hotplugging);
+		write("/sys/power/ipa/control_temp", data.thermal.ipa_control_temp);
+	}
+
+	/*********************
+	 * Kernel
+	 */
+	if (power_is_subprofile_enabled("kernel")) {
+		write("/sys/module/workqueue/parameters/power_efficient", data.kernel.power_efficient_workqueue);
+	}
 }
 
 /***********************************
  * Boost
  */
 static void power_boostpulse(int duration) {
-	int boost = 0;
-
-	pfread(POWER_CONFIG_BOOST, &boost);
-	if (!boost) {
-		return;
-	}
-
-	// ALOGD("%s: duration     = %d", __func__, duration);
+	ALOGDD("%s: duration     = %d", __func__, duration);
 
 	if (duration > 0) {
-		pfwritegov(0, "boostpulse_duration", duration);
-		pfwritegov(1, "boostpulse_duration", duration);
+		write_cpugov(0, "boostpulse_duration", duration);
+		write_cpugov(1, "boostpulse_duration", duration);
 	}
 
-	pfwritegov(0, "boostpulse", true);
-	pfwritegov(1, "boostpulse", true);
+	write_cpugov(0, "boostpulse", true);
+	write_cpugov(1, "boostpulse", true);
 }
 
 /***********************************
@@ -318,54 +365,54 @@ static void power_fingerprint_state(bool state) {
 	 *    Turn off:  -Regulator  ->  -Wakelocks
 	 */
 	if (state) {
-		pfwrite(POWER_FINGERPRINT_WAKELOCKS, true);
-		pfwrite(POWER_FINGERPRINT_REGULATOR, true);
+		write(POWER_FINGERPRINT_WAKELOCKS, true);
+		write(POWER_FINGERPRINT_REGULATOR, true);
 	} else {
-		pfwrite(POWER_FINGERPRINT_REGULATOR, false);
+		write(POWER_FINGERPRINT_REGULATOR, false);
+		write(POWER_FINGERPRINT_WAKELOCKS, false);
+	}
+}
 
-		if (!fp_wakelocks)
-			pfwrite(POWER_FINGERPRINT_WAKELOCKS, false);
+static void power_dt2w_state(bool state) {
+	power->input.dt2w = !!state;
+	if (state) {
+		write(POWER_DT2W_ENABLED, true);
+	} else {
+		write(POWER_DT2W_ENABLED, false);
 	}
 }
  
-static void power_input_device_state(int state) {
-	int dt2w = 0, dt2w_sysfs = 0;
+static void power_input_device_state(bool state) {
+	ALOGDD("%s: state = %d", __func__, state);
 
-	pfread(POWER_CONFIG_DT2W, &dt2w);
-	pfread(POWER_DT2W_ENABLED, &dt2w_sysfs);
+	if (state) {
+		write(power->input.touchscreen_control_path, true);
 
-#if LOG_NDEBUG
-	ALOGD("%s: state         = %d", __func__, state);
-	ALOGD("%s: dt2w          = %d", __func__, dt2w);
-	ALOGD("%s: dt2w_sysfs    = %d", __func__, dt2w_sysfs);
-#endif
+		if (power->input.touchkeys_enabled) {
+			write(POWER_TOUCHKEYS_ENABLED, true);
+			write(POWER_TOUCHKEYS_BRIGHTNESS, 255);
+		}
 
-	switch (state) {
-		case INPUT_STATE_DISABLE:
+		power_fingerprint_state(true);
 
-			// save to current state to prevent enabling
-			pfread(POWER_TOUCHKEYS_ENABLED, &input_state_touchkeys);
+		if (power_supports_dt2w()) {
+			power_dt2w_state(power->input.dt2w);
+		}
+	} else {
+		// save to current state to prevent enabling
+		read(POWER_TOUCHKEYS_ENABLED, &power->input.touchkeys_enabled);
 
-			pfwrite(POWER_TOUCHSCREEN_ENABLED, false);
-			pfwrite(POWER_TOUCHKEYS_ENABLED, false);
-			pfwrite(POWER_TOUCHKEYS_BRIGTHNESS, 0);
+		write(power->input.touchscreen_control_path, false);
+		write(POWER_TOUCHKEYS_ENABLED, false);
+		write(POWER_TOUCHKEYS_BRIGHTNESS, 0);
 
+		if (power_should_shutdown_fingerprint()) {
 			power_fingerprint_state(false);
+		}
 
-			break;
-
-		case INPUT_STATE_ENABLE:
-
-			pfwrite(POWER_TOUCHSCREEN_ENABLED, true);
-
-			if (input_state_touchkeys) {
-				pfwrite(POWER_TOUCHKEYS_ENABLED, true);
-				pfwrite(POWER_TOUCHKEYS_BRIGTHNESS, 255);
-			}
-
-			power_fingerprint_state(true);
-
-			break;
+		if (power_supports_dt2w()) {
+			power_dt2w_state(power->input.dt2w);
+		}
 	}
 
 	if (dt2w) {
@@ -378,218 +425,102 @@ static void power_input_device_state(int state) {
 	usleep(100 * 1000); // 100ms
 }
 
-static void power_set_interactive(struct power_module __unused * module, int on) {
-	int screen_is_on = (on != 0);
+static void power_set_interactive(struct power_module* module, int on) {
+	bool screen_is_on = (on != 0);
 
-#if LOG_NDEBUG
-	ALOGD("%s: on = %d", __func__, on);
-#endif
+	ALOGDD("%s: enter; on=%d", __func__, on);
+	pthread_mutex_lock(&power->lock);
+
+	if (!power->initialized) {
+		ALOGDD("%s: exit; (not yet initialized)", __func__);
+		return;
+	}
 
 	if (!screen_is_on) {
 		power_set_profile(PROFILE_SCREEN_OFF);
 	} else {
-		power_set_profile(requested_power_profile);
+		power_set_profile(power->profile.requested);
 	}
 
 	power_input_device_state(screen_is_on);
+
+	pthread_mutex_unlock(&power->lock);
+	ALOGDD("%s: exit;", __func__);
 }
 
 /***********************************
  * Features
  */
-static int power_get_feature(struct power_module *module __unused, feature_t feature) {
+#ifdef POWER_HAS_LINEAGE_HINTS
+static int power_get_feature(struct power_module *module, feature_t feature) {
+	int retval = -EINVAL;
+
+	ALOGDD("%s: enter; feature=%d", __func__, feature);
+	pthread_mutex_lock(&power->lock);
+
+	if (!power->initialized) {
+		ALOGDD("%s: exit; (not yet initialized)", __func__);
+		retval = -EAGAIN;
+		goto exit;
+	}
+
 	switch (feature) {
 		case POWER_FEATURE_SUPPORTED_PROFILES:
-			ALOGD("%s: request for POWER_FEATURE_SUPPORTED_PROFILES = %d", __func__, PROFILE_MAX_USABLE);
-			return PROFILE_MAX_USABLE;
+			ALOGDD("%s: request for POWER_FEATURE_SUPPORTED_PROFILES = %d", __func__, PROFILE_MAX_USABLE);
+			if (power_has_profiles_enabled()) {
+				if (power_has_extended_profiles_enabled()) {
+					retval = PROFILE_MAX_USABLE_EXTENDED;
+				} else {
+					retval = PROFILE_MAX_USABLE;
+				}
+			} else {
+				retval = 0;
+			}
+			break;
+
 		case POWER_FEATURE_DOUBLE_TAP_TO_WAKE:
-			ALOGD("%s: request for POWER_FEATURE_DOUBLE_TAP_TO_WAKE = 1", __func__);
-			return 1;
-		default:
-			return -EINVAL;
+			ALOGDD("%s: request for POWER_FEATURE_DOUBLE_TAP_TO_WAKE = 1", __func__);
+			if (power_supports_dt2w()) {
+				retval = 1;
+			} else {
+				retval = 0;
+			}
+			break;
 	}
+
+exit:
+	pthread_mutex_unlock(&power->lock);
+	ALOGDD("%s: exit; rc=%d", __func__, retval);
+
+	return retval;
 }
+#endif // POWER_HAS_LINEAGE_HINTS
 
 static void power_set_feature(struct power_module *module, feature_t feature, int state) {
+	ALOGDD("%s: enter; feature=%d, state=%d", __func__, feature, state);
+	pthread_mutex_lock(&power->lock);
+
+	if (!power->initialized) {
+		ALOGDD("%s: exit; (not yet initialized)", __func__);
+		return;
+	}
+
 	switch (feature) {
 		case POWER_FEATURE_DOUBLE_TAP_TO_WAKE:
-			ALOGD("%s: set POWER_FEATURE_DOUBLE_TAP_TO_WAKE to \"%d\"", __func__, state);
-			if (state) {
-				pfwrite(POWER_CONFIG_DT2W, true);
-				pfwrite_legacy(POWER_DT2W_ENABLED, true);
-			} else {
-				pfwrite(POWER_CONFIG_DT2W, false);
-				pfwrite_legacy(POWER_DT2W_ENABLED, false);
+			ALOGDD("%s: set POWER_FEATURE_DOUBLE_TAP_TO_WAKE to \"%d\"", __func__, state);
+			if (power_supports_dt2w()) {
+				power_dt2w_state(state);
 			}
+
 			break;
 
 		default:
 			ALOGW("Error setting the feature %d and state %d, it doesn't exist\n",
 				  feature, state);
-		break;
+			break;
 	}
-}
-
-/***********************************
- * Utilities
- */
-// C++ I/O
-static bool pfwrite(string path, string str) {
-	ofstream file;
-
-	file.open(path);
-	if (!file.is_open()) {
-		ALOGE("%s: failed to open %s", __func__, path.c_str());
-		return false;
-	}
-
-#if LOG_NDEBUG
-	ALOGI("%s: store \"%s\" to %s", __func__, str.c_str(), path.c_str());
-#endif
-
-	file << str;
-	file.close();
-
-	return true;
-}
-
-static bool pfwrite(string path, bool flag) {
-	return pfwrite(path, flag ? 1 : 0);
-}
-
-static bool pfwrite(string path, int value) {
-	return pfwrite(path, to_string(value));
-}
-
-static bool pfwrite(string path, unsigned int value) {
-	return pfwrite(path, to_string(value));
-}
-
-static bool pfassertgov(int core, string asserted_cpugov) {
-	string cpugov;
-	ostringstream path;
-	ostringstream cpugov_path;
-
-	path << "/sys/devices/system/cpu/cpu" << core << "/cpufreq";
-	cpugov_path << path.str() << "/scaling_governor";
-
-	pfread(cpugov_path.str(), cpugov);
-
-	return (cpugov == asserted_cpugov);
-}
-
-static bool pfwritegov(int core, string file, string str) {
-	string cpugov;
-	ostringstream path;
-	ostringstream cpugov_path;
-
-	path << "/sys/devices/system/cpu/cpu" << core << "/cpufreq";
-	cpugov_path << path.str() << "/scaling_governor";
-
-	pfread(cpugov_path.str(), cpugov);
-
-	path << "/" << cpugov << "/" << file;
-
-	if (!is_file(path.str())) {
-		return false;
-	}
-
-	return pfwrite(path.str(), str);
-}
-
-static bool pfwritegov(int core, string file, bool flag) {
-	return pfwritegov(core, file, flag ? 1 : 0);
-}
-
-static bool pfwritegov(int core, string file, int value) {
-	return pfwritegov(core, file, to_string(value));
-}
-
-static bool pfwritegov(int core, string file, unsigned int value) {
-	return pfwritegov(core, file, to_string(value));
-}
-
-static bool pfread(string path, int *v) {
-	ifstream file(path);
-	string line;
-
-	if (!file.is_open()) {
-		ALOGE("%s: failed to open %s", __func__, path.c_str());
-		return false;
-	}
-
-	if (!getline(file, line)) {
-		ALOGE("%s: failed to read from %s", __func__, path.c_str());
-		return false;
-	}
-
-	file.close();
-	*v = stoi(line);
-
-	return true;
-}
-
-static bool pfread(string path, string &str) {
-	ifstream file(path);
-
-	if (!file.is_open()) {
-		ALOGE("%s: failed to open %s", __func__, path.c_str());
-		return false;
-	}
-
-	if (!getline(file, str)) {
-		ALOGE("%s: failed to read from %s", __func__, path.c_str());
-		return false;
-	}
-
-	file.close();
-	return true;
-}
-
-// legacy I/O
-static bool pfwrite_legacy(string path, string str) {
-	FILE *file = fopen(path.c_str(), "w");
-	bool ret = true;
-
-	if (file == NULL) {
-		ALOGE("%s: failed to open %s", __func__, path.c_str());
-		return false;
-	}
-
-	fprintf(file, "%s\n", str.c_str());
-
-	if (ferror(file)) {
-		ALOGE("%s: failed to write to %s", __func__, path.c_str());
-		ret = false;
-	}
-
-	fclose(file);
-	return ret;
-}
-
-static bool pfwrite_legacy(string path, int value) {
-	return pfwrite_legacy(path, to_string(value));
-}
-
-static bool pfwrite_legacy(string path, bool flag) {
-	return pfwrite_legacy(path, flag ? 1 : 0);
-}
-
-// existence-helpers
-static bool is_dir(string path) {
-	struct stat fstat;
-	const char *cpath = path.c_str();
-
-	return !stat(cpath, &fstat) &&
-		(fstat.st_mode & S_IFDIR) == S_IFDIR;
-}
-
-static bool is_file(string path) {
-	struct stat fstat;
-	const char *cpath = path.c_str();
-
-	return !stat(cpath, &fstat) &&
-		(fstat.st_mode & S_IFREG) == S_IFREG;
+	pthread_mutex_unlock(&power->lock);
+	ALOGDD("%s: exit", __func__);
 }
 
 static struct hw_module_methods_t power_module_methods = {
