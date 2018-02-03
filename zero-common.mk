@@ -233,9 +233,15 @@ PRODUCT_PACKAGES += \
 
 # Power
 PRODUCT_PACKAGES += \
-    power.universal7420 \
+    power.exynos5 \
     android.hardware.power@1.0-service \
     android.hardware.power@1.0-impl
+
+# Power control interface
+PRODUCT_PACKAGES += \
+	libpower-config \
+	libzeropowersettings_jni \
+	ZeroPowerSettings
 
 # common build properties
 PRODUCT_PROPERTY_OVERRIDES += \
