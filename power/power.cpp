@@ -159,12 +159,10 @@ static void power_hint(struct power_module *module, power_hint_t hint, void *dat
 
 #ifdef POWER_HAS_LINEAGE_HINTS
 		case POWER_HINT_SET_PROFILE:
-			if (power_profiles_automated()) {
-				ALOGI("%s: hint(POWER_HINT_SET_PROFILE, %d, %llu)", __func__, value, (unsigned long long)data);
-				power->profile.requested = value;
-				power_set_profile(value);
-			    break;
-#endif
+			ALOGI("%s: hint(POWER_HINT_SET_PROFILE, %d, %llu)", __func__, value, (unsigned long long)data);
+			power->profile.requested = value;
+			power_set_profile(value);
+			break;
 
 		case POWER_HINT_SUSTAINED_PERFORMANCE:
 		case POWER_HINT_VR_MODE:
