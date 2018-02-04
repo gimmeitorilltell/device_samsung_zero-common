@@ -329,7 +329,7 @@ struct power_profile {
 			.aggressive_up_migration = false,
 		},
 		.gpu = {
-			.min_lock = 160,
+			.min_lock = 266,
 			.max_lock = 600,
 		},
 		.input = {

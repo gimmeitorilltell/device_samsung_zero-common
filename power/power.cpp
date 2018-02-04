@@ -36,11 +36,6 @@
 
 using namespace std;
 
-struct sec_power_module {
-	struct power_module base;
-	pthread_mutex_t lock;
-};
-
 #define container_of(addr, struct_name, field_name) \
 	((struct_name *)((char *)(addr) - offsetof(struct_name, field_name)))
 
@@ -53,7 +48,7 @@ static struct sec_power_module *power = nullptr;
 static int power_open(const hw_module_t *module, const char *name, hw_device_t **device) {
 	int retval = 0; // 0 is ok; -1 is error
 
-	ALOGD("%s: enter; name=%s", __func__, name);
+	ALOGDD("%s: enter; name=%s", __func__, name);
 
 	if (strcmp(name, POWER_HARDWARE_MODULE_ID) == 0) {
 		if (instance) {
@@ -89,7 +84,7 @@ static int power_open(const hw_module_t *module, const char *name, hw_device_t *
 		retval = -EINVAL;
 	}
 
-	ALOGD("%s: exit %d", __func__, retval);
+	ALOGDD("%s: exit %d", __func__, retval);
 	return retval;
 }
 
@@ -162,13 +157,14 @@ static void power_hint(struct power_module *module, power_hint_t hint, void *dat
 			}
 			break;
 
+#ifdef POWER_HAS_LINEAGE_HINTS
 		case POWER_HINT_SET_PROFILE:
 			if (power_profiles_automated()) {
 				ALOGI("%s: hint(POWER_HINT_SET_PROFILE, %d, %llu)", __func__, value, (unsigned long long)data);
 				power->profile.requested = value;
 				power_set_profile(value);
-			}
-			break;
+			    break;
+#endif
 
 		case POWER_HINT_SUSTAINED_PERFORMANCE:
 		case POWER_HINT_VR_MODE:
@@ -350,14 +346,6 @@ static void power_boostpulse(int duration) {
  * Inputs
  */
 static void power_fingerprint_state(bool state) {
-	int fp_always_on = 0, fp_wakelocks = 1;
-
-	pfread(POWER_CONFIG_FP_ALWAYS_ON, &fp_always_on);
-	if (fp_always_on) {
-		return;
-	}
-
-	pfread(POWER_CONFIG_FP_WAKELOCKS, &fp_wakelocks);
 
 	/*
 	 * Ordered power toggling:
@@ -413,15 +401,6 @@ static void power_input_device_state(bool state) {
 
 		power_dt2w_state(power->input.dt2w);
 	}
-
-	if (dt2w) {
-		pfwrite_legacy(POWER_DT2W_ENABLED, true);
-	} else {
-		pfwrite_legacy(POWER_DT2W_ENABLED, false);
-	}
-
-	// give hw some milliseconds to properly boot up
-	usleep(100 * 1000); // 100ms
 }
 
 static void power_set_interactive(struct power_module* module, int on) {
@@ -514,6 +493,7 @@ static struct hw_module_methods_t power_module_methods = {
 };
 
 struct sec_power_module HAL_MODULE_INFO_SYM = {
+
 	.base = {
 		.common = {
 			.tag = HARDWARE_MODULE_TAG,
@@ -527,7 +507,9 @@ struct sec_power_module HAL_MODULE_INFO_SYM = {
 
 		.init = power_init,
 		.powerHint = power_hint,
-		.getFeature = power_get_feature,
+#ifdef POWER_HAS_LINEAGE_HINTS
+ 		.getFeature = power_get_feature,
+#endif
 		.setFeature = power_set_feature,
 		.setInteractive = power_set_interactive,
 	},
