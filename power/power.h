@@ -24,6 +24,8 @@ using namespace std;
 #ifndef EXYNOS5_POWER_HAL_POWER_H_INCLUDED
 #define EXYNOS5_POWER_HAL_POWER_H_INCLUDED
 
+#define PROFILE_INVALID             -2
+
 #define PROFILE_SCREEN_OFF          -1
 #define PROFILE_POWER_SAVE           0
 #define PROFILE_BALANCED             1
@@ -43,34 +45,33 @@ using namespace std;
 #define POWER_FINGERPRINT_REGULATOR       "/sys/class/fingerprint/fingerprint/regulator"
 #define POWER_FINGERPRINT_WAKELOCKS       "/sys/class/fingerprint/fingerprint/wakelocks"
 
-/*
- * Macros
- */
-#define PROFILE_SCREEN_OFF            -2
-#define PROFILE_DREAMING_OR_DOZING    -1
-#define PROFILE_POWER_SAVE            0
-#define PROFILE_BALANCED              1
-#define PROFILE_HIGH_PERFORMANCE      2
-#define PROFILE_BIAS_POWER_SAVE       3
-#define PROFILE_BIAS_PERFORMANCE      4
-#define PROFILE_MAX_USABLE            5
+#ifdef POWER_MULTITHREAD_LOCK_PROTECTION
+  #define POWER_LOCK(mutex)      pthread_mutex_lock(mutex);
+  #define POWER_UNLOCK(mutex)    pthread_mutex_unlock(mutex);
+#else
+  #define POWER_LOCK(mutex)      do { } while(0);
+  #define POWER_UNLOCK(mutex)    do { } while(0);
+#endif /* POWER_MULTITHREAD_LOCK_PROTECTION */
 
-#define INPUT_STATE_DISABLE    0
-#define INPUT_STATE_ENABLE     1
+struct sec_power_module {
 
-#define POWER_CONFIG_DT2W            "/data/power/dt2w"
-#define POWER_CONFIG_PROFILES        "/data/power/profiles"
-#define POWER_CONFIG_BOOST           "/data/power/boost"
-#define POWER_CONFIG_FP_ALWAYS_ON    "/data/power/fp_always_on"
-#define POWER_CONFIG_FP_WAKELOCKS    "/data/power/fp_wakelocks"
+	struct power_module base;
+	pthread_mutex_t lock;
 
-#define POWER_DT2W_ENABLED            "/sys/android_touch/doubletap2wake"
-#define POWER_TOUCHKEYS_ENABLED       "/sys/class/input/input0/enabled"
-#define POWER_TOUCHSCREEN_ENABLED     "/sys/class/input/input1/enabled"
-#define POWER_TOUCHKEYS_BRIGTHNESS    "/sys/class/sec/sec_touchkey/brightness"
+	bool initialized;
 
-#define POWER_FINGERPRINT_REGULATOR    "/sys/class/fingerprint/fingerprint/regulator"
-#define POWER_FINGERPRINT_WAKELOCKS    "/sys/class/fingerprint/fingerprint/wakelocks"
+	struct {
+		int current;
+		int requested;
+	} profile;
+
+	struct {
+		bool touchkeys_enabled;
+		bool dt2w;
+		string touchscreen_control_path;
+	} input;
+
+};
 
 /** Initializing */
 static int power_open(const hw_module_t *module, const char *name, hw_device_t **device);
