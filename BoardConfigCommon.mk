@@ -27,4 +27,4 @@ TARGET_SOC := exynos7420
 -include $(LOCAL_PATH)/configs/board/*.mk
 
 # inherit from the proprietary version
--include vendor/samsung/candy-devices/zero-common/BoardConfigVendor.mk
+-include vendor/samsung/zero-common/zero-common-vendor.mk
