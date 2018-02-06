@@ -243,6 +243,10 @@ PRODUCT_PACKAGES += \
 	libzeropowersettings_jni \
 	ZeroPowerSettings
 
+# permission-updater
+PRODUCT_COPY_FILES += \
+    device/samsung/zero-common/power/android.hardware.power@1.0-service.rc:system/vendor/etc/init/android.hardware.power@1.0-service.rc
+
 # common build properties
 PRODUCT_PROPERTY_OVERRIDES += \
     ro.sf.lcd_density=640 \
