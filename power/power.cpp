@@ -82,7 +82,7 @@ static int power_open(const hw_module_t *module, const char *name, hw_device_t *
 		retval = -EINVAL;
 	}
 
-	ALOGDD("%s: exit %d", __func__, retval);
+	ALOGDD("%s: exit; rc=%d", __func__, retval);
 	return retval;
 }
 
@@ -172,6 +172,7 @@ static void power_hint(struct power_module *module, power_hint_t hint, void *dat
 			power->profile.requested = value;
 			power_set_profile(power, value);
 			break;
+#endif
 
 		case POWER_HINT_SUSTAINED_PERFORMANCE:
 		case POWER_HINT_VR_MODE:
@@ -190,6 +191,7 @@ static void power_hint(struct power_module *module, power_hint_t hint, void *dat
 			}
 			break;
 
+#ifdef POWER_HAS_NEXUS_HINTS
 		case POWER_HINT_DOZING:
 			if (power_profiles_automated() && power_profiles_dozing()) {
 				ALOGI("%s: hint(POWER_HINT_DOZING, %d, %llu)", __func__, value, (unsigned long long)data);
@@ -213,6 +215,7 @@ static void power_hint(struct power_module *module, power_hint_t hint, void *dat
 				}
 			}
 			break;
+#endif // POWER_HAS_NEXUS_HINTS
 
 		/***********************************
 		 * Boosting
@@ -424,7 +427,6 @@ static void power_boostpulse_cpu_fallback(struct sec_power_module *power, int co
  * Inputs
  */
 static void power_fingerprint_state(bool state) {
-
 	/*
 	 * Ordered power toggling:
 	 *    Turn on:   +Wakelocks  ->  +Regulator
