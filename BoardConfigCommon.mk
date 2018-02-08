@@ -16,6 +16,8 @@
 
 LOCAL_PATH := device/samsung/zero-common
 
+TARGET_SPECIFIC_HEADER_PATH += $(LOCAL_PATH)/include
+
 BOARD_VENDOR := samsung
 
 # Core board-properties
