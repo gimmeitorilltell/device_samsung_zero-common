@@ -189,8 +189,8 @@ PRODUCT_PACKAGES += \
     libstlport
 
 # MDNIE
-PRODUCT_PACKAGES += \
-    AdvancedDisplay
+#PRODUCT_PACKAGES += \
+#    AdvancedDisplay
 
 # Memory
 PRODUCT_PACKAGES += \
@@ -244,7 +244,6 @@ PRODUCT_PROPERTY_OVERRIDES += \
 # media build properties
 PRODUCT_PROPERTY_OVERRIDES += \
 	media.sf.omx-plugin=libffmpeg_omx.so,libsomxcore.so 
-
 
 # Radio
 PRODUCT_PACKAGES += \
