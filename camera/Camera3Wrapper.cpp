@@ -21,7 +21,8 @@
 
 #include "CameraWrapper.h"
 #include "Camera3Wrapper.h"
-#include "SECCameraProperties.h"
+
+#include <camera/SECCameraProperties.h>
 
 typedef struct wrapper_camera3_device {
     camera3_device_t base;
