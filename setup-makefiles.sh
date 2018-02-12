@@ -46,6 +46,6 @@ setup_vendor "$DEVICE" "$VENDOR" "$CANDY_ROOT"
 # Copyright headers and guards
 write_headers
 
-write_makefiles "$MY_DIR"/../$DEVICE/device-proprietary-blobs.txt
+write_makefiles "$MY_DIR"/../$DEVICE/proprietary-blobs.txt
 
 write_footers
