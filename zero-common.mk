@@ -42,8 +42,8 @@ TARGET_SCREEN_WIDTH := 1440
 
 # Permissions
 PRODUCT_COPY_FILES += \
-    device/samsung/zero-common/configs/permissions/com.samsung.permission.HRM_EXT.xml:system/vendor/etc/permissions/com.samsung.permission.HRM_EXT.xml \
-    device/samsung/zero-common/configs/permissions/com.samsung.permission.SSENSOR.xml:system/vendor/etc/permissions/com.samsung.permission.SSENSOR.xml \
+    device/samsung/zero-common/configs/permissions/com.samsung.permission.HRM_EXT.xml:system/etc/permissions/com.samsung.permission.HRM_EXT.xml \
+    device/samsung/zero-common/configs/permissions/com.samsung.permission.SSENSOR.xml:system/etc/permissions/com.samsung.permission.SSENSOR.xml \
     frameworks/native/data/etc/android.hardware.bluetooth_le.xml:system/etc/permissions/android.hardware.bluetooth_le.xml \
     frameworks/native/data/etc/android.hardware.camera.flash-autofocus.xml:system/etc/permissions/android.hardware.camera.flash-autofocus.xml \
     frameworks/native/data/etc/android.hardware.camera.front.xml:system/etc/permissions/android.hardware.camera.front.xml \
@@ -80,8 +80,8 @@ PRODUCT_COPY_FILES += \
 
 # Audio
 PRODUCT_COPY_FILES += \
-    $(LOCAL_PATH)/configs/audio_effects.conf:system/vendor/etc/audio_effects.conf \
-    $(LOCAL_PATH)/configs/audio_policy.conf:system/vendor/etc/audio_policy.conf
+    $(LOCAL_PATH)/configs/audio_effects.conf:system/etc/audio_effects.conf \
+    $(LOCAL_PATH)/configs/audio_policy.conf:system/etc/audio_policy.conf
 
 PRODUCT_PACKAGES += \
     audio.primary.universal7420 \
@@ -240,7 +240,7 @@ PRODUCT_PACKAGES += \
 
 # permission-updater
 PRODUCT_COPY_FILES += \
-    device/samsung/zero-common/power/android.hardware.power@1.0-service.rc:system/vendor/etc/init/android.hardware.power@1.0-service.rc
+    device/samsung/zero-common/power/android.hardware.power@1.0-service.rc:system/etc/init/android.hardware.power@1.0-service.rc
 
 # common build properties
 PRODUCT_PROPERTY_OVERRIDES += \
@@ -260,7 +260,7 @@ PRODUCT_PROPERTY_OVERRIDES += \
 
 # Properties
 PRODUCT_COPY_FILES += \
-    device/samsung/zero-common/zero-common.prop:system/vendor/build.prop
+    device/samsung/zero-common/zero-common.prop:system/build.prop
 # Radio
 PRODUCT_PACKAGES += \
 	libxml2 \
@@ -297,6 +297,10 @@ PRODUCT_PACKAGES += \
 # SDCardFS
 PRODUCT_PROPERTY_OVERRIDES += \
 	ro.sys.sdcardfs=0
+
+# seccomp
+PRODUCT_COPY_FILES += \
+    $(LOCAL_PATH)/seccomp/mediacodec.policy:system/etc/seccomp_policy/mediacodec.policy
 
 # Sensorhub
 PRODUCT_PACKAGES += \
