@@ -611,7 +611,7 @@ struct sec_power_module HAL_MODULE_INFO_SYM = {
 		.init = power_init,
 		.powerHint = power_hint,
 #ifdef POWER_HAS_LINEAGE_HINTS
- 		.getFeature = power_get_feature,
+		.getFeature = power_get_feature,
 #endif
 		.setFeature = power_set_feature,
 		.setInteractive = power_set_interactive,
