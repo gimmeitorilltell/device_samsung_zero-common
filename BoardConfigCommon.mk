@@ -171,7 +171,7 @@ TARGET_SLSI_VARIANT := cm
 TARGET_POWERHAL_VARIANT := samsung
 
 # Radio
-BOARD_PROVIDES_LIBRIL := true
+#BOARD_PROVIDES_LIBRIL := true
 BOARD_RIL_CLASS := ../../../$(LOCAL_PATH)/ril
 
 # Recovery
