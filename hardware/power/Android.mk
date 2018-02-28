@@ -14,19 +14,25 @@
 # limitations under the License.
 #
 
-# include user-sided power settings
-include device/samsung/zero-common/power/settings/Android.mk
-
-LOCAL_PATH := device/samsung/zero-common/power
+LOCAL_PATH := $(call my-dir)
 
 #
 # power-HAL
 #
 include $(CLEAR_VARS)
 
+LOCAL_MODULE               := android.hardware.power@1.0-service.zero
+LOCAL_MODULE_RELATIVE_PATH := hw
+LOCAL_MODULE_TAGS          := optional
+LOCAL_PROPRIETARY_MODULE   := true
+
+LOCAL_INIT_RC := android.hardware.power@1.0-service.zero.rc
+
 LOCAL_SRC_FILES := \
-	power.cpp \
-	utils.cpp
+	Service.cpp \
+	Power.cpp \
+	Profiles.cpp \
+	Utils.cpp
 
 LOCAL_SHARED_LIBRARIES := \
 	libcutils \
@@ -39,10 +45,6 @@ LOCAL_MODULE_RELATIVE_PATH := hw
 LOCAL_MODULE_TAGS          := optional
 LOCAL_CFLAGS               := -Wall -Werror -Wno-unused-parameter -Wno-unused-function
 LOCAL_PROPRIETARY_MODULE   := true
-
-ifneq (,$(wildcard lineage-sdk/ vendor/cmsdk/))
-  LOCAL_CFLAGS += -DPOWER_HAS_LINEAGE_HINTS
-endif
 
 include $(BUILD_SHARED_LIBRARY)
 

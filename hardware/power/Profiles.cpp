@@ -1,11 +1,11 @@
 /*
- * Copyright (C) 2018 Lukas Berger <mail@lukasberger.at>
+ * Copyright (C) 2018 TeamNexus
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *	  http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -14,99 +14,71 @@
  * limitations under the License.
  */
 
-#include <string>
+#define LOG_TAG "zero-power-profiles"
+#define LOG_NDEBUG 0
 
-#ifndef EXYNOS5_POWER_HAL_PROFILES_INCLUDED
-#define EXYNOS5_POWER_HAL_PROFILES_INCLUDED
+#include <log/log.h>
 
-using namespace std;
+#include "Power.h"
+#include "Profiles.h"
 
-struct power_profile_cpucluster {
+namespace android {
+namespace hardware {
+namespace power {
+namespace V1_0 {
+namespace implementation {
 
-	unsigned int freq_min;
-	unsigned int freq_max;
-
-};
-
-struct power_profile {
-
-	struct {
-
-		struct power_profile_cpucluster cl0;
-
-		struct power_profile_cpucluster cl1;
-
-		// we use same settings for both cl0 and cl1
-		struct {
-
-			int down_load;
-			int down_step;
-			int down_lts_ratio;
-			int down_lts_elev;
-
-			int up_load;
-			int up_step;
-			int up_lts_ratio;
-			int up_lts_elev;
-
-		} nexus;
-
-	} cpu;
-
-	struct {
-
-		bool boost;
-		bool semiboost;
-
-		unsigned int sb_down_thres;
-		unsigned int sb_up_thres;
-
-		bool active_down_migration;
-		bool aggressive_up_migration;
-
-	} hmp;
-
-	struct {
-
-		unsigned int min_lock;
-		unsigned int max_lock;
-
-	} gpu;
-
-	struct {
-
-		bool booster;
-		string booster_table;
-
-	} input;
-
-	struct {
-
-		bool hotplugging;
-		int ipa_control_temp;
-
-	} thermal;
-
-	struct {
-
-		bool power_efficient_workqueue;
-
-	} kernel;
-
-} power_profiles_data[PROFILE_MAX_USABLE + 1] = {
-
-	/***********
-	 * PROFILE_SCREEN_OFF
-	 */
+const SecPowerProfile* Profiles::getProfileData(SecPowerProfiles profile) {
+	switch_uint32_t (profile)
 	{
-		.cpu = {
-			.cl0 = {
-				.freq_max = 400000,
-				.freq_min = 200000,
-			},
-			.cl1 = {
-				.freq_max = 400000,
-				.freq_min = 200000,
+		case_uint32_t (SecPowerProfiles::SCREEN_OFF):
+		{
+			ALOGV("%s: returning kPowerProfileScreenOff", __func__);
+			return &kPowerProfileScreenOff;
+		}
+		case_uint32_t (SecPowerProfiles::POWER_SAVE):
+		{
+			ALOGV("%s: returning kPowerProfilePowerSave", __func__);
+			return &kPowerProfilePowerSave;
+		}
+		case_uint32_t (SecPowerProfiles::BIAS_POWER_SAVE):
+		{
+			ALOGV("%s: returning kPowerProfileBiasPowerSave", __func__);
+			return &kPowerProfileBiasPowerSave;
+		}
+		case_uint32_t (SecPowerProfiles::BALANCED):
+		{
+			ALOGV("%s: returning kPowerProfileBalanced", __func__);
+			return &kPowerProfileBalanced;
+		}
+		case_uint32_t (SecPowerProfiles::BIAS_PERFORMANCE):
+		{
+			ALOGV("%s: returning kPowerProfileBiasPerformance", __func__);
+			return &kPowerProfileBiasPerformance;
+		}
+		case_uint32_t (SecPowerProfiles::HIGH_PERFORMANCE):
+		{
+			ALOGV("%s: returning kPowerProfileHighPerformance", __func__);
+			return &kPowerProfileHighPerformance;
+		}
+	}
+	return nullptr;
+}
+
+/***********
+ * ROFILE_SCREEN_OFF
+ */
+const SecPowerProfile Profiles::kPowerProfileScreenOff = {
+	.cpu = {
+		.apollo = {
+			.governor = "nexus",
+			.freq_min = 200000,
+			.freq_max = 400000,
+			.freq_hispeed = 200000,
+			.nexus = {
+				.lpr_ratio = 150,
+				.lpr_down_elevation = 1,
+				.lpr_up_elevation = 1,
 			},
 			.nexus = {
 				.down_load = 50,
@@ -145,18 +117,20 @@ struct power_profile {
 		},
 	},
 
-	/***********
-	 * PROFILE_POWER_SAVE
-	 */
-	{
-		.cpu = {
-			.cl0 = {
-				.freq_max = 1300000,
-				.freq_min = 400000,
-			},
-			.cl1 = {
-				.freq_max = 1900000,
-				.freq_min = 200000,
+/***********
+ * PROFILE_POWER_SAVE
+ */
+const SecPowerProfile Profiles::kPowerProfilePowerSave = {
+	.cpu = {
+		.apollo = {
+			.governor = "nexus",
+			.freq_min = 200000,
+			.freq_hispeed = 700000,
+			.freq_max = 1500000,
+			.nexus = {
+				.lpr_ratio = 150,
+				.lpr_down_elevation = 1,
+				.lpr_up_elevation = 1,
 			},
 			.nexus = {
 				.down_load = 40,
@@ -195,18 +169,20 @@ struct power_profile {
 		},
 	},
 
-	/***********
-	 * PROFILE_BALANCED
-	 */
-	{
-		.cpu = {
-			.cl0 = {
-				.freq_max = 1500000,
-				.freq_min = 600000,
-			},
-			.cl1 = {
-				.freq_max = 2100000,
-				.freq_min = 400000,
+/***********
+ * PROFILE_BIAS_POWER_SAVE
+ */
+const SecPowerProfile Profiles::kPowerProfileBiasPowerSave = {
+	.cpu = {
+		.apollo = {
+			.governor = "nexus",
+			.freq_min = 300000,
+			.freq_max = 1500000,
+			.freq_hispeed = 800000,
+			.nexus = {
+				.lpr_ratio = 125,
+				.lpr_down_elevation = 1,
+				.lpr_up_elevation = 1,
 			},
 			.nexus = {
 				.down_load = 40,
@@ -245,18 +221,23 @@ struct power_profile {
 		},
 	},
 
-	/***********
-	 * PROFILE_HIGH_PERFORMANCE
-	 */
-	{
-		.cpu = {
-			.cl0 = {
-				.freq_max = 1704000,
-				.freq_min = 1000000,
-			},
-			.cl1 = {
-				.freq_max = 2304000,
-				.freq_min = 800000,
+/***********
+ * PROFILE_BALANCED
+ */
+const SecPowerProfile Profiles::kPowerProfileBalanced = {
+	.cpu = {
+		.apollo = {
+			.governor = "interactive",
+			.freq_min = 400000,
+			.freq_max = 1500000,
+			.freq_hispeed = 900000,
+			.interactive = {
+				.above_hispeed_delay = "19000",
+				.go_hispeed_load = 85,
+				.min_sample_time = 40000,
+				.target_loads = "75",
+				.timer_rate = 20000,
+				.timer_slack = 20000,
 			},
 			.nexus = {
 				.down_load = 20,
@@ -295,18 +276,23 @@ struct power_profile {
 		},
 	},
 
-	/***********
-	 * PROFILE_BIAS_POWER_SAVE
-	 */
-	{
-		.cpu = {
-			.cl0 = {
-				.freq_max = 1400000,
-				.freq_min = 400000,
-			},
-			.cl1 = {
-				.freq_max = 2000000,
-				.freq_min = 200000,
+/***********
+ * PROFILE_BIAS_PERFORMANCE
+ */
+const SecPowerProfile Profiles::kPowerProfileBiasPerformance = {
+	.cpu = {
+		.apollo = {
+			.governor = "interactive",
+			.freq_min = 600000,
+			.freq_max = 1500000,
+			.freq_hispeed = 1200000,
+			.interactive = {
+				.above_hispeed_delay = "19000",
+				.go_hispeed_load = 85,
+				.min_sample_time = 40000,
+				.target_loads = "75",
+				.timer_rate = 20000,
+				.timer_slack = 20000,
 			},
 			.nexus = {
 				.down_load = 35,
@@ -345,14 +331,23 @@ struct power_profile {
 		},
 	},
 
-	/***********
-	 * PROFILE_BIAS_PERFORMANCE
-	 */
-	{
-		.cpu = {
-			.cl0 = {
-				.freq_max = 1600000,
-				.freq_min = 800000,
+/***********
+ * PROFILE_HIGH_PERFORMANCE
+ */
+const SecPowerProfile Profiles::kPowerProfileHighPerformance = {
+	.cpu = {
+		.apollo = {
+			.governor = "interactive",
+			.freq_min = 800000,
+			.freq_max = 1500000,
+			.freq_hispeed = 1500000,
+			.interactive = {
+				.above_hispeed_delay = "19000",
+				.go_hispeed_load = 85,
+				.min_sample_time = 40000,
+				.target_loads = "75",
+				.timer_rate = 20000,
+				.timer_slack = 20000,
 			},
 			.cl1 = {
 				.freq_max = 2200000,
@@ -397,4 +392,8 @@ struct power_profile {
 
 };
 
-#endif // EXYNOS5_POWER_HAL_PROFILES_INCLUDED
+}  // namespace implementation
+}  // namespace V1_0
+}  // namespace power
+}  // namespace hardware
+}  // namespace android
