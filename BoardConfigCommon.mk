@@ -16,7 +16,11 @@
 
 LOCAL_PATH := device/samsung/zero-common
 
+ALLOW_MISSING_DEPENDENCIES := true
+
 BOARD_VENDOR := samsung
+
+BOARD_OFONO_DRIVER := ril
 
 # Core board-properties
 TARGET_BOOTLOADER_BOARD_NAME := universal7420
