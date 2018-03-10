@@ -33,3 +33,10 @@ ifeq ($(BOARD_HAS_DUAL_SIM),true)
 else
   include $(LOCAL_PATH)/configs/radio/single/product.mk
 endif
+
+ifneq ($(filter zerofltespr zeroltespr,$(TARGET_DEVICE)),)
+PRODUCT_COPY_FILES += \
+    $(LOCAL_PATH)/configs/data/netmgr_config.xml:system/etc/data/netmgr_config.xml \
+    $(LOCAL_PATH)/configs/data/qmi_config.xml:system/etc/data/qmi_config.xml \
+    $(LOCAL_PATH)/configs/data/dsi_config.xml:system/etc/data/dsi_config.xml
+endif
