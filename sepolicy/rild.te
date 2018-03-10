@@ -55,4 +55,7 @@ allow rild self:capability chown;
 allow rild audioserver:dir search;
 allow rild audioserver:file { read open getattr };
 
+# Allow qmuxd rild access
+qmux_socket(rild)
+
 set_prop(rild, rild_prop)
