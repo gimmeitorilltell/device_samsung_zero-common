@@ -31,13 +31,6 @@ PRODUCT_PACKAGES += \
 PRODUCT_PACKAGES += \
 	resetprop.zero   # Required for setting ro.*-properties for dual-SIM support
 
-# Dual-SIM Support
-ifeq ($(BOARD_HAS_DUAL_SIM),true)
-  include $(LOCAL_PATH)/configs/radio/dual/product.mk
-else
-  include $(LOCAL_PATH)/configs/radio/single/product.mk
-endif
-
 ifneq ($(filter zerofltespr zeroltespr,$(TARGET_DEVICE)),)
 PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/configs/data/netmgr_config.xml:system/etc/data/netmgr_config.xml \
