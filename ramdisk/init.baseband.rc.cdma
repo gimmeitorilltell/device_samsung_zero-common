@@ -47,6 +47,13 @@ on fs
 
     mount tmpfs tmpfs /cpdump size=150M,mode=0700,uid=0,gid=0
 
+# Waketime for fast dormancy
+    chown radio radio /sys/devices/virtual/smdpkt/smdcntl0/open_timeout
+    chown radio radio /sys/module/f_rmnet/parameters/rmnet_ctl_ch
+    chown radio radio /sys/module/rmnet/parameters/rmnet_ctl_ch
+    chmod 666 /sys/module/f_rmnet/parameters/rmnet_ctl_ch
+    chmod 666 /sys/module/rmnet/parameters/rmnet_ctl_ch
+
 # AT Distributor for factory test
 service at_distributor /system/bin/at_distributor
     class late_start
